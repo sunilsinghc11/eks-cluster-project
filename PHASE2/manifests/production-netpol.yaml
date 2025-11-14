@@ -1,0 +1,37 @@
+# Network Policy for production namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: secure-nginx-netpol
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: secure-nginx
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from pods with label access=frontend
+  - from:
+    - podSelector:
+        matchLabels:
+          access: frontend
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS queries
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS to external services (for package updates, etc.)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
