@@ -1,0 +1,35 @@
+# Pod Security Admission (PSA) namespace configurations
+# Start with audit mode to understand impact before enforcing
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    # Audit against 'restricted' profile but don't enforce yet
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    # Warn on violations but allow pods to run
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    # Enforce 'restricted' profile - blocks non-compliant pods
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    # Also audit and warn
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+
+# Instructions:
+# 1. Apply this manifest: kubectl apply -f psa-labels.yaml
+# 2. Monitor audit logs for violations
+# 3. When ready to enforce, add:
+#    pod-security.kubernetes.io/enforce: restricted
+#    pod-security.kubernetes.io/enforce-version: latest
