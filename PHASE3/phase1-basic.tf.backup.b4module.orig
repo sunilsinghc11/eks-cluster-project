@@ -53,8 +53,6 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_caller_identity" "current" {}
-
 # ============================================================
 # VPC
 # ============================================================
@@ -169,64 +167,61 @@ resource "aws_route_table_association" "private" {
 # KMS (optional)
 # ============================================================
 
-#OLD KMS KEY - Now using module for it.
 # Create a customer-managed KMS key for EKS secrets encryption if requested.
-# resource "aws_kms_key" "eks" {
-#   count                    = var.create_kms_key ? 1 : 0
-#   description             = "KMS key for EKS secrets encryption - ${var.cluster_name}"
-#   deletion_window_in_days = 30
-#   enable_key_rotation     = true  # Enable automatic key rotation
-#   multi_region           = false  # Set to true if you need multi-region support
+resource "aws_kms_key" "eks" {
+  count                    = var.create_kms_key ? 1 : 0
+  description             = "KMS key for EKS secrets encryption - ${var.cluster_name}"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true  # Enable automatic key rotation
+  multi_region           = false  # Set to true if you need multi-region support
   
-#   # More restrictive key policy
-#   policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [
-#       {
-#         Sid    = "Enable IAM User Permissions"
-#         Effect = "Allow"
-#         Principal = {
-#           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-#         }
-#         Action   = "kms:*"
-#         Resource = "*"
-#       },
-#       {
-#         Sid    = "Allow EKS to use the key"
-#         Effect = "Allow"
-#         Principal = {
-#           AWS = aws_iam_role.cluster.arn
-#         }
-#         Action = [
-#           "kms:Encrypt",
-#           "kms:Decrypt",
-#           "kms:ReEncrypt*",
-#           "kms:GenerateDataKey*",
-#           "kms:DescribeKey"
-#         ]
-#         Resource = "*"
-#       }
-#     ]
-#   })
+  # More restrictive key policy
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EKS to use the key"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.cluster.arn
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 
-#   tags = {
-#     Name        = "${var.cluster_name}-kms"
-#     Environment = "production"
-#     Purpose     = "eks-encryption"
-#   }
-# #}
+  tags = {
+    Name        = "${var.cluster_name}-kms"
+    Environment = "production"
+    Purpose     = "eks-encryption"
+  }
+}
 
-#OLD KMS ALIAS - Now using module for it.
-# resource "aws_kms_alias" "eks_alias" {
-#   count = var.create_kms_key ? 1 : 0
-#   name  = "alias/${var.cluster_name}-eks"
-#   target_key_id = aws_kms_key.eks[0].key_id
-# }
+resource "aws_kms_alias" "eks_alias" {
+  count = var.create_kms_key ? 1 : 0
+  name  = "alias/${var.cluster_name}-eks"
+  target_key_id = aws_kms_key.eks[0].key_id
+}
 
-# OLD KMS LOCAL - Now using module for it. 
-#locals {
-#   kms_arn = var.kms_key_arn != "" ? var.kms_key_arn : (var.create_kms_key ? aws_kms_key.eks[0].arn : "")
-# }
+locals {
+  kms_arn = var.kms_key_arn != "" ? var.kms_key_arn : (var.create_kms_key ? aws_kms_key.eks[0].arn : "")
+}
 
 # ============================================================
 # IAM ROLES (managed)
@@ -280,34 +275,6 @@ resource "aws_iam_role_policy_attachment" "node_cni_policy" {
 resource "aws_iam_role_policy_attachment" "node_registry_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
   role       = aws_iam_role.node.name
-}
-#==============================================================================
-# KMS Encryption Module (Day 4 - Modularized)
-#==============================================================================
-
-module "kms_encryption" {
-  source = "../modules/kms-encryption"
-
-  cluster_name            = var.cluster_name
-  aws_account_id          = data.aws_caller_identity.current.account_id
-  cluster_role_arn        = aws_iam_role.cluster.arn
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-  multi_region            = false
-
-  tags = {
-    Name        = "${var.cluster_name}-kms"
-    Environment = "production"
-    Purpose     = "eks-encryption"
-    ManagedBy   = "Terraform"
-    Project     = var.cluster_name
-    Phase       = "2-secure"
-  }
-}
-
-# KMS ARN for use throughout configuration
-locals {
-  kms_arn = module.kms_encryption.kms_key_arn
 }
 
 # ============================================================
